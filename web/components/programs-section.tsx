@@ -1,13 +1,6 @@
 "use client"
 
-import {
-  Rocket,
-  Code2,
-  Users,
-  Banknote,
-  GraduationCap,
-  ArrowRight,
-} from "lucide-react"
+import { Rocket, Code2, Users, Banknote, GraduationCap } from "lucide-react"
 
 const programs = [
   {
@@ -70,11 +63,6 @@ export function ProgramsSection() {
               key={program.title}
               className="group relative flex flex-col rounded-xl border border-border bg-card p-8 transition-all duration-300 hover:border-accent/30 hover:shadow-lg hover:shadow-accent/5"
             >
-              {program.tag && (
-                <span className="absolute right-4 top-4 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                  {program.tag}
-                </span>
-              )}
               <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-accent/10 text-accent transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
                 <program.icon className="h-6 w-6" />
               </div>
@@ -84,10 +72,6 @@ export function ProgramsSection() {
               <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
                 {program.description}
               </p>
-              <div className="mt-5 flex items-center gap-1 text-sm font-medium text-accent transition-colors group-hover:text-accent/80">
-                Learn more
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-              </div>
             </div>
           ))}
         </div>

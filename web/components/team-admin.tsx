@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react"
+import { supabase } from "@/lib/supabase-client"
 
 type TeamMember = {
   id: string
@@ -42,28 +43,96 @@ export function TeamAdmin() {
     const fetchMembers = async () => {
       try {
         const res = await fetch("/api/team")
-        if (!res.ok) throw new Error("API fetch failed")
-        const json = await res.json()
-        const data = Array.isArray(json.data) ? json.data : []
-        setMembers(
-          data.map((m: any) => ({
-            id: m.id,
-            name: m.name ?? "",
-            role: m.role ?? "",
-            department: m.department ?? "",
-            initials: m.initials ?? "",
-            email: m.email ?? "",
-            linkedin: m.linkedin ?? "",
-            photoUrl: m.photo_url ?? "",
-          })),
-        )
+        if (res.ok) {
+          const json = await res.json()
+          const data = Array.isArray(json.data) ? json.data : []
+          setMembers(
+            data.map((m: any) => ({
+              id: m.id,
+              name: m.name ?? "",
+              role: m.role ?? "",
+              department: m.department ?? "",
+              initials: m.initials ?? "",
+              email: m.email ?? "",
+              linkedin: m.linkedin ?? "",
+              photoUrl: m.photo_url ?? "",
+            })),
+          )
+          try {
+            localStorage.setItem("ed_cell_team", JSON.stringify(data))
+          } catch {}
+          return
+        }
       } catch (err: any) {
         console.error("API fetch failed:", err)
-        alert(`Failed to load team members: ${err.message}`)
+      }
+      try {
+        const cached = localStorage.getItem("ed_cell_team")
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          const list = Array.isArray(parsed) ? parsed : []
+          setMembers(
+            list.map((m: any) => ({
+              id: m.id || m.id === "" ? m.id : uuid(),
+              name: m.name ?? "",
+              role: m.role ?? "",
+              department: m.department ?? "",
+              initials: m.initials ?? "",
+              email: m.email ?? "",
+              linkedin: m.linkedin ?? "",
+              photoUrl: m.photo_url ?? m.photoUrl ?? "",
+            })),
+          )
+        } else {
+          setMembers([])
+        }
+      } catch {
         setMembers([])
       }
     }
     fetchMembers()
+  }, [])
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/team")
+        if (res.ok) {
+          const json = await res.json()
+          const data = Array.isArray(json.data) ? json.data : []
+          setMembers(
+            data.map((m: any) => ({
+              id: m.id,
+              name: m.name ?? "",
+              role: m.role ?? "",
+              department: m.department ?? "",
+              initials: m.initials ?? "",
+              email: m.email ?? "",
+              linkedin: m.linkedin ?? "",
+              photoUrl: m.photo_url ?? "",
+            })),
+          )
+          try {
+            localStorage.setItem("ed_cell_team", JSON.stringify(data))
+          } catch {}
+        }
+      } catch {}
+    }
+
+    const channel = supabase
+      .channel("admin-team")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_team_members" },
+        () => {
+          refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const persistOrder = async (list: TeamMember[]) => {
@@ -77,6 +146,9 @@ export function TeamAdmin() {
       })
     } catch {}
     try { localStorage.setItem("ed_cell_team", JSON.stringify(list)) } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   const onAdd = () => {
@@ -103,6 +175,9 @@ export function TeamAdmin() {
   const onDelete = async (id: string) => {
     try { await fetch(`/api/team/${id}`, { method: "DELETE" }) } catch {}
     await persistOrder(members.filter((m) => m.id !== id))
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   const move = async (index: number, direction: "up" | "down") => {
@@ -123,8 +198,9 @@ export function TeamAdmin() {
         .map((part) => part[0])
         .join("")
         .toUpperCase()
-    const item: TeamMember = { ...form, id: form.id || uuid(), initials }
+    const base: TeamMember = { ...form, id: form.id, initials }
     if (editing) {
+      const item: TeamMember = { ...base, id: editing.id || base.id || uuid() }
       try {
         await fetch(`/api/team/${editing.id}`, {
           method: "PUT",
@@ -142,26 +218,50 @@ export function TeamAdmin() {
       } catch {}
       await persistOrder(members.map((m) => (m.id === editing.id ? item : m)))
     } else {
+      let created: any = null
+      const fallback: TeamMember = {
+        ...base,
+        id: base.id || uuid(),
+      }
       try {
-        await fetch("/api/team", {
+        const res = await fetch("/api/team", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: item.name,
-            role: item.role,
-            department: item.department,
-            initials: item.initials,
-            email: item.email,
-            linkedin: item.linkedin,
-            photoUrl: item.photoUrl,
+            name: fallback.name,
+            role: fallback.role,
+            department: fallback.department,
+            initials: fallback.initials,
+            email: fallback.email,
+            linkedin: fallback.linkedin,
+            photoUrl: fallback.photoUrl,
             order_index: members.length,
           }),
         })
+        if (res.ok) {
+          const json = await res.json()
+          created = json?.data || null
+        }
       } catch {}
+      const item: TeamMember = created
+        ? {
+            id: created.id,
+            name: created.name ?? fallback.name,
+            role: created.role ?? fallback.role,
+            department: created.department ?? fallback.department,
+            initials: created.initials ?? fallback.initials,
+            email: created.email ?? fallback.email,
+            linkedin: created.linkedin ?? fallback.linkedin,
+            photoUrl: created.photo_url ?? fallback.photoUrl,
+          }
+        : fallback
       await persistOrder([...members, item])
     }
     setOpen(false)
     setEditing(null)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   return (

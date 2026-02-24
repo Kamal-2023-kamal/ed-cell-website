@@ -16,6 +16,11 @@ const EventSchema = z.object({
 
 export async function GET() {
   try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+    if (!url || !key) {
+      return NextResponse.json({ data: [] })
+    }
     const { data, error } = await supabase
       .from("ed_cell_events")
       .select("id, title, date, time, location, description, status, registration_link, image_url, order_index, created_at")
@@ -24,7 +29,8 @@ export async function GET() {
     if (error) throw error
     return NextResponse.json({ data })
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Failed to fetch events" }, { status: 500 })
+    console.error("[api/events] GET error:", error?.message || error)
+    return NextResponse.json({ data: [] })
   }
 }
 
@@ -36,21 +42,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
     }
     const payload = parsed.data
-    const { error } = await supabase.from("ed_cell_events").insert([
-      {
-        title: payload.title,
-        date: payload.date,
-        time: payload.time,
-        location: payload.location,
-        description: payload.description,
-        status: payload.status,
-        registration_link: payload.registrationLink,
-        image_url: payload.imageUrl,
-        order_index: payload.order_index,
-      },
-    ])
+    const { data, error } = await supabase
+      .from("ed_cell_events")
+      .insert([
+        {
+          title: payload.title,
+          date: payload.date,
+          time: payload.time,
+          location: payload.location,
+          description: payload.description,
+          status: payload.status,
+          registration_link: payload.registrationLink,
+          image_url: payload.imageUrl,
+          order_index: payload.order_index,
+        },
+      ])
+      .select(
+        "id, title, date, time, location, description, status, registration_link, image_url, order_index, created_at",
+      )
+      .single()
     if (error) throw error
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ data })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Failed to create event" }, { status: 500 })
   }

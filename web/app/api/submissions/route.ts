@@ -15,6 +15,11 @@ const SubmissionSchema = z.object({
 
 export async function GET() {
   try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+    if (!url || !key) {
+      return NextResponse.json({ data: [] })
+    }
     const { data, error } = await supabase
       .from("ed_cell_submissions")
       .select("id, full_name, register_number, email, department, year, reason, interests, startup_experience, created_at")
@@ -25,7 +30,7 @@ export async function GET() {
     return NextResponse.json({ data })
   } catch (error: any) {
     console.error("[api/submissions] GET error:", error?.message || error)
-    return NextResponse.json({ error: "Failed to fetch submissions" }, { status: 500 })
+    return NextResponse.json({ data: [] })
   }
 }
 
@@ -59,4 +64,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to submit" }, { status: 500 })
   }
 }
-

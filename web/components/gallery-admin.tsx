@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react"
+import { supabase } from "@/lib/supabase-client"
 
 type GalleryItem = {
   id: string
@@ -39,26 +40,90 @@ export function GalleryAdmin() {
     const fetchItems = async () => {
       try {
         const res = await fetch("/api/gallery")
-        if (!res.ok) throw new Error("API fetch failed")
-        const json = await res.json()
-        const data = Array.isArray(json.data) ? json.data : []
-        setItems(
-          data.map((i: any) => ({
-            id: i.id,
-            src: i.src ?? "",
-            alt: i.alt ?? "",
-            caption: i.caption ?? "",
-            tags: i.tags ?? "",
-            visible: i.visible !== false,
-          })),
-        )
+        if (res.ok) {
+          const json = await res.json()
+          const data = Array.isArray(json.data) ? json.data : []
+          setItems(
+            data.map((i: any) => ({
+              id: i.id,
+              src: i.src ?? "",
+              alt: i.alt ?? "",
+              caption: i.caption ?? "",
+              tags: i.tags ?? "",
+              visible: i.visible !== false,
+            })),
+          )
+          try {
+            localStorage.setItem("ed_cell_gallery", JSON.stringify(data))
+          } catch {}
+          return
+        }
       } catch (err: any) {
         console.error("API fetch failed:", err)
-        alert(`Failed to load gallery items: ${err.message}`)
+      }
+      try {
+        const cached = localStorage.getItem("ed_cell_gallery")
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          const list = Array.isArray(parsed) ? parsed : []
+          setItems(
+            list.map((i: any) => ({
+              id: i.id || i.id === "" ? i.id : uuid(),
+              src: i.src ?? "",
+              alt: i.alt ?? "",
+              caption: i.caption ?? "",
+              tags: i.tags ?? "",
+              visible: i.visible !== false,
+            })),
+          )
+        } else {
+          setItems([])
+        }
+      } catch {
         setItems([])
       }
     }
     fetchItems()
+  }, [])
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/gallery")
+        if (res.ok) {
+          const json = await res.json()
+          const data = Array.isArray(json.data) ? json.data : []
+          setItems(
+            data.map((i: any) => ({
+              id: i.id,
+              src: i.src ?? "",
+              alt: i.alt ?? "",
+              caption: i.caption ?? "",
+              tags: i.tags ?? "",
+              visible: i.visible !== false,
+            })),
+          )
+          try {
+            localStorage.setItem("ed_cell_gallery", JSON.stringify(data))
+          } catch {}
+        }
+      } catch {}
+    }
+
+    const channel = supabase
+      .channel("admin-gallery")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_gallery_items" },
+        () => {
+          refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const persistOrder = async (list: GalleryItem[]) => {
@@ -72,6 +137,9 @@ export function GalleryAdmin() {
       })
     } catch {}
     try { localStorage.setItem("ed_cell_gallery", JSON.stringify(list)) } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   const onAdd = () => {
@@ -96,6 +164,9 @@ export function GalleryAdmin() {
   const onDelete = async (id: string) => {
     try { await fetch(`/api/gallery/${id}`, { method: "DELETE" }) } catch {}
     await persistOrder(items.filter((i) => i.id !== id))
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   const move = async (index: number, direction: "up" | "down") => {
@@ -131,12 +202,13 @@ export function GalleryAdmin() {
   }
 
   const onSave = async () => {
-    const item: GalleryItem = {
+    const base: GalleryItem = {
       ...form,
-      id: form.id || uuid(),
+      id: form.id,
       visible: form.visible !== false,
     }
     if (editing) {
+      const item: GalleryItem = { ...base, id: editing.id || base.id || uuid() }
       try {
         await fetch(`/api/gallery/${editing.id}`, {
           method: "PUT",
@@ -152,24 +224,46 @@ export function GalleryAdmin() {
       } catch {}
       await persistOrder(items.map((i) => (i.id === editing.id ? item : i)))
     } else {
+      let created: any = null
+      const fallback: GalleryItem = {
+        ...base,
+        id: base.id || uuid(),
+      }
       try {
-        await fetch("/api/gallery", {
+        const res = await fetch("/api/gallery", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            src: item.src,
-            alt: item.alt,
-            caption: item.caption,
-            tags: item.tags,
-            visible: item.visible,
+            src: fallback.src,
+            alt: fallback.alt,
+            caption: fallback.caption,
+            tags: fallback.tags,
+            visible: fallback.visible,
             order_index: items.length,
           }),
         })
+        if (res.ok) {
+          const json = await res.json()
+          created = json?.data || null
+        }
       } catch {}
+      const item: GalleryItem = created
+        ? {
+            id: created.id,
+            src: created.src ?? fallback.src,
+            alt: created.alt ?? fallback.alt,
+            caption: created.caption ?? fallback.caption,
+            tags: created.tags ?? fallback.tags,
+            visible: created.visible !== false,
+          }
+        : fallback
       await persistOrder([...items, item])
     }
     setOpen(false)
     setEditing(null)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   return (
@@ -314,4 +408,3 @@ export function GalleryAdmin() {
     </div>
   )
 }
-

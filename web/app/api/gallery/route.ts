@@ -13,6 +13,11 @@ const ItemSchema = z.object({
 
 export async function GET() {
   try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+    if (!url || !key) {
+      return NextResponse.json({ data: [] })
+    }
     const { data, error } = await supabase
       .from("ed_cell_gallery_items")
       .select("id, src, alt, caption, tags, visible, order_index, created_at")
@@ -21,7 +26,8 @@ export async function GET() {
     if (error) throw error
     return NextResponse.json({ data })
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Failed to fetch gallery" }, { status: 500 })
+    console.error("[api/gallery] GET error:", error?.message || error)
+    return NextResponse.json({ data: [] })
   }
 }
 
@@ -33,18 +39,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
     }
     const p = parsed.data
-    const { error } = await supabase.from("ed_cell_gallery_items").insert([
-      {
-        src: p.src,
-        alt: p.alt,
-        caption: p.caption,
-        tags: p.tags,
-        visible: p.visible,
-        order_index: p.order_index,
-      },
-    ])
+    const { data, error } = await supabase
+      .from("ed_cell_gallery_items")
+      .insert([
+        {
+          src: p.src,
+          alt: p.alt,
+          caption: p.caption,
+          tags: p.tags,
+          visible: p.visible,
+          order_index: p.order_index,
+        },
+      ])
+      .select("id, src, alt, caption, tags, visible, order_index, created_at")
+      .single()
     if (error) throw error
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ data })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Failed to create item" }, { status: 500 })
   }

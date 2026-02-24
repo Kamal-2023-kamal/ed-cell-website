@@ -63,7 +63,7 @@ export function AdminLoginForm() {
             </Label>
             <Input
               id="email"
-              placeholder="admin"
+              placeholder="Enter username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -95,17 +95,7 @@ export function AdminLoginForm() {
           </Button>
         </form>
 
-        <div className="mt-6 rounded-lg border border-border/50 bg-secondary/30 p-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Demo Credentials
-          </p>
-          <p className="mt-2 text-sm text-foreground">
-            <span className="font-semibold">Username:</span> admin
-          </p>
-          <p className="text-sm text-foreground">
-            <span className="font-semibold">Password:</span> admin@2026
-          </p>
-        </div>
+        
       </div>
     </div>
   )

@@ -13,9 +13,9 @@ const UpdateSchema = z.object({
   order_index: z.number().int().nonnegative().optional(),
 })
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const { id } = await params
     const json = await request.json()
     const parsed = UpdateSchema.safeParse(json)
     if (!parsed.success) {
@@ -39,9 +39,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const { id } = await params
     const { error } = await supabase.from("ed_cell_team_members").delete().eq("id", id)
     if (error) throw error
     return NextResponse.json({ ok: true })

@@ -9,6 +9,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
+import { supabase } from "@/lib/supabase-client"
 
 export function AdminOverview() {
   const [stats, setStats] = useState({
@@ -81,8 +82,7 @@ export function AdminOverview() {
 
         const subData = Array.isArray(subs.data) ? subs.data : []
         const evtData = Array.isArray(evts.data) ? evts.data : []
-        
-        // Calculate stats
+
         setStats({
           submissions: subData.length,
           events: evtData.length,
@@ -92,30 +92,26 @@ export function AdminOverview() {
           upcomingEvents: evtData.filter((e: any) => e.status !== "Completed").length,
         })
 
-        // Calculate year distribution
         const years: Record<string, number> = {}
         subData.forEach((s: any) => {
           const y = s.year || "Unknown"
           years[y] = (years[y] || 0) + 1
         })
         setYearDistribution(
-          Object.entries(years).map(([name, value]) => ({ name, value }))
+          Object.entries(years).map(([name, value]) => ({ name, value })),
         )
 
-        // Calculate trends (last 7 days)
         const dates: Record<string, number> = {}
         subData.forEach((s: any) => {
           const date = new Date(s.created_at).toLocaleDateString()
           dates[date] = (dates[date] || 0) + 1
         })
-        // Sort by date and take last 7 entries if possible, or just show all
         const sortedDates = Object.entries(dates)
           .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
           .slice(-7)
           .map(([date, count]) => ({ date, count }))
-        
-        setSubmissionTrend(sortedDates)
 
+        setSubmissionTrend(sortedDates)
       } catch (e) {
         console.error("Failed to fetch dashboard data", e)
       } finally {
@@ -124,6 +120,65 @@ export function AdminOverview() {
     }
 
     fetchData()
+
+    const handler = () => {
+      setLoading(true)
+      fetchData()
+    }
+
+    window.addEventListener("edcell-admin-data-changed", handler)
+    const submissionsChannel = supabase
+      .channel("overview-submissions")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_submissions" },
+        () => {
+          setLoading(true)
+          fetchData()
+        },
+      )
+      .subscribe()
+    const eventsChannel = supabase
+      .channel("overview-events")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_events" },
+        () => {
+          setLoading(true)
+          fetchData()
+        },
+      )
+      .subscribe()
+    const teamChannel = supabase
+      .channel("overview-team")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_team_members" },
+        () => {
+          setLoading(true)
+          fetchData()
+        },
+      )
+      .subscribe()
+    const galleryChannel = supabase
+      .channel("overview-gallery")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_gallery_items" },
+        () => {
+          setLoading(true)
+          fetchData()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      window.removeEventListener("edcell-admin-data-changed", handler)
+      supabase.removeChannel(submissionsChannel)
+      supabase.removeChannel(eventsChannel)
+      supabase.removeChannel(teamChannel)
+      supabase.removeChannel(galleryChannel)
+    }
   }, [])
 
   if (loading) {

@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = (username: string, password: string) => {
-    if (username === "admin" && password === "admin@2026") {
+    if (username === "admin@ads" && password === "admin@1234") {
       setIsLoggedIn(true)
       localStorage.setItem("admin_auth", "true")
       return true

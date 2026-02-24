@@ -1,8 +1,8 @@
 import { AdminLoginForm } from "@/components/admin-login-form"
 
 export const metadata = {
-  title: "Admin Login - ED Cell",
-  description: "Admin login for ED Cell submissions",
+  title: "Admin - ED Cell",
+  description: "ED Cell administration dashboard",
 }
 
 export default function AdminLoginPage() {

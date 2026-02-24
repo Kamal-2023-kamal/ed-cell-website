@@ -8,8 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Pencil, Trash2, Copy } from "lucide-react"
- 
+import { Plus, Pencil, Trash2, Copy, Calendar as CalendarIcon } from "lucide-react"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { supabase } from "@/lib/supabase-client"
+
  type EventItem = {
    id: string
    title: string
@@ -43,33 +46,103 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
    })
  
   useEffect(() => {
-   const fetchEvents = async () => {
-     try {
-       const res = await fetch("/api/events")
-       if (!res.ok) throw new Error("API fetch failed")
-       const json = await res.json()
-       const data = Array.isArray(json.data) ? json.data : []
-       setEvents(
-         data.map((e: any) => ({
-           id: e.id,
-           title: e.title ?? "",
-           date: e.date ?? "",
-           time: e.time ?? "",
-           location: e.location ?? "",
-           description: e.description ?? "",
-           status: e.status ?? "Coming Soon",
-           registrationLink: e.registration_link ?? "",
-            imageUrl: e.image_url ?? "",
-         })),
-       )
-     } catch (err: any) {
-      console.error("API fetch failed:", err)
-      alert(`Failed to load events: ${err.message}`)
-      setEvents([])
+    const fetchEvents = async () => {
+      try {
+        const res = await fetch("/api/events")
+        if (res.ok) {
+          const json = await res.json()
+          const data = Array.isArray(json.data) ? json.data : []
+          setEvents(
+            data.map((e: any) => ({
+              id: e.id,
+              title: e.title ?? "",
+              date: e.date ?? "",
+              time: e.time ?? "",
+              location: e.location ?? "",
+              description: e.description ?? "",
+              status: e.status ?? "Coming Soon",
+              registrationLink: e.registration_link ?? "",
+              imageUrl: e.image_url ?? "",
+            })),
+          )
+          try {
+            localStorage.setItem("ed_cell_events", JSON.stringify(data))
+          } catch {}
+          return
+        }
+      } catch (err: any) {
+        console.error("API fetch failed:", err)
+      }
+      try {
+        const cached = localStorage.getItem("ed_cell_events")
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          const list = Array.isArray(parsed) ? parsed : []
+          setEvents(
+            list.map((e: any) => ({
+              id: e.id || e.id === "" ? e.id : uuid(),
+              title: e.title ?? "",
+              date: e.date ?? "",
+              time: e.time ?? "",
+              location: e.location ?? "",
+              description: e.description ?? "",
+              status: e.status ?? "Coming Soon",
+              registrationLink: e.registration_link ?? e.registrationLink ?? "",
+              imageUrl: e.image_url ?? e.imageUrl ?? "",
+            })),
+          )
+        } else {
+          setEvents([])
+        }
+      } catch {
+        setEvents([])
+      }
     }
-  }
-   fetchEvents()
- }, [])
+    fetchEvents()
+  }, [])
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/events")
+        if (res.ok) {
+          const json = await res.json()
+          const data = Array.isArray(json.data) ? json.data : []
+          setEvents(
+            data.map((e: any) => ({
+              id: e.id,
+              title: e.title ?? "",
+              date: e.date ?? "",
+              time: e.time ?? "",
+              location: e.location ?? "",
+              description: e.description ?? "",
+              status: e.status ?? "Coming Soon",
+              registrationLink: e.registration_link ?? "",
+              imageUrl: e.image_url ?? "",
+            })),
+          )
+          try {
+            localStorage.setItem("ed_cell_events", JSON.stringify(data))
+          } catch {}
+        }
+      } catch {}
+    }
+
+    const channel = supabase
+      .channel("admin-events")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_events" },
+        () => {
+          refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
  
   const persistOrder = async (list: EventItem[]) => {
     setEvents(list)
@@ -86,6 +159,9 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
     try {
       localStorage.setItem("ed_cell_events", JSON.stringify(list))
     } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
  
    const onAdd = () => {
@@ -112,15 +188,49 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
  
   const onDelete = async (id: string) => {
     try {
-      await fetch(`/api/events/${id}`, { method: "DELETE" })
-    } catch {}
+      const res = await fetch(`/api/events/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        alert("Delete failed. Please try again.")
+        return
+      }
+    } catch {
+      alert("Delete failed. Please check your connection and try again.")
+      return
+    }
     const list = events.filter((e) => e.id !== id)
     await persistOrder(list)
+    try {
+      const ref = await fetch("/api/events")
+      if (ref.ok) {
+        const json = await ref.json()
+        const data = Array.isArray(json.data) ? json.data : []
+        setEvents(
+          data.map((e: any) => ({
+            id: e.id,
+            title: e.title ?? "",
+            date: e.date ?? "",
+            time: e.time ?? "",
+            location: e.location ?? "",
+            description: e.description ?? "",
+            status: e.status ?? "Coming Soon",
+            registrationLink: e.registration_link ?? "",
+            imageUrl: e.image_url ?? "",
+          })),
+        )
+        try {
+          localStorage.setItem("ed_cell_events", JSON.stringify(data))
+        } catch {}
+      }
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
  
   const onSave = async () => {
-    const item: EventItem = { ...form, id: form.id || uuid() }
+    const base: EventItem = { ...form, id: form.id }
     if (editing) {
+      const item: EventItem = { ...base, id: editing.id || base.id || uuid() }
       try {
         await fetch(`/api/events/${editing.id}`, {
           method: "PUT",
@@ -140,28 +250,54 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
       const next = events.map((e) => (e.id === editing.id ? item : e))
       await persistOrder(next)
     } else {
+      let created: any = null
+      const fallback: EventItem = {
+        ...base,
+        id: base.id || uuid(),
+        status: base.status || "Registrations Open",
+      }
       try {
-        await fetch("/api/events", {
+        const res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: item.title,
-            date: item.date,
-            time: item.time,
-            location: item.location,
-            description: item.description,
-            status: item.status || "Registrations Open",
-            registrationLink: item.registrationLink,
-            imageUrl: item.imageUrl,
+            title: fallback.title,
+            date: fallback.date,
+            time: fallback.time,
+            location: fallback.location,
+            description: fallback.description,
+            status: fallback.status,
+            registrationLink: fallback.registrationLink,
+            imageUrl: fallback.imageUrl,
             order_index: 0,
           }),
         })
+        if (res.ok) {
+          const json = await res.json()
+          created = json?.data || null
+        }
       } catch {}
+      const item: EventItem = created
+        ? {
+            id: created.id,
+            title: created.title ?? fallback.title,
+            date: created.date ?? fallback.date,
+            time: created.time ?? fallback.time,
+            location: created.location ?? fallback.location,
+            description: created.description ?? fallback.description,
+            status: created.status ?? fallback.status,
+            registrationLink: created.registration_link ?? fallback.registrationLink,
+            imageUrl: created.image_url ?? fallback.imageUrl,
+          }
+        : fallback
       const next = [item, ...events]
       await persistOrder(next)
     }
     setOpen(false)
     setEditing(null)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("edcell-admin-data-changed"))
+    }
   }
 
   const upcomingCount = events.filter((e) => e.status !== "Completed").length
@@ -175,6 +311,19 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
     } catch {
       alert("Unable to copy link")
     }
+  }
+
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const parseDate = (s: string) => {
+    const d = new Date(s)
+    return isNaN(d.getTime()) ? undefined : d
+  }
+  const formatDate = (d: Date | undefined) => {
+    if (!d) return ""
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
   }
  
    return (
@@ -307,10 +456,63 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
            </DialogHeader>
            <div className="space-y-3">
              <Input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-             <Input placeholder="Date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-             <Input placeholder="Time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => setDatePickerOpen(true)}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {form.date ? form.date : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0">
+                  <Calendar
+                    mode="single"
+                    selected={parseDate(form.date)}
+                    onSelect={(d: Date | undefined) => {
+                      const s = formatDate(d)
+                      setForm({ ...form, date: s })
+                      setDatePickerOpen(false)
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              <Input
+                type="time"
+                placeholder="Time"
+                value={form.time}
+                onChange={(e) => setForm({ ...form, time: e.target.value })}
+              />
+            </div>
              <Input placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
              <Textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Gallery tag</div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={(form.title || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}
+                  readOnly
+                />
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="h-9 w-9"
+                  onClick={async () => {
+                    const tag = (form.title || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+                    try {
+                      await navigator.clipboard.writeText(tag)
+                      alert("Tag copied")
+                    } catch {}
+                  }}
+                  aria-label="Copy gallery tag"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
              <Select
                value={form.status}
                onValueChange={(value) => setForm({ ...form, status: value })}
@@ -330,7 +532,7 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
              onChange={(e) => setForm({ ...form, registrationLink: e.target.value })}
            />
             <div className="space-y-2">
-              <div className="text-sm font-medium">Event Image</div>
+              <div className="text-sm font-medium">Event Image URL</div>
               {form.imageUrl ? (
                 <img
                   src={form.imageUrl}
@@ -339,22 +541,9 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react"
                 />
               ) : null}
               <Input
-                type="file"
-                accept="image/*"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  const fd = new FormData()
-                  fd.append("file", file)
-                  try {
-                    const res = await fetch("/api/events/image", { method: "POST", body: fd })
-                    if (!res.ok) throw new Error("Upload failed")
-                    const json = await res.json()
-                    setForm({ ...form, imageUrl: json.url })
-                  } catch {
-                    alert("Failed to upload image")
-                  }
-                }}
+                placeholder="https://..."
+                value={form.imageUrl || ""}
+                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
