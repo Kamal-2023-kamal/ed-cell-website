@@ -190,9 +190,9 @@ export default function GrandOpeningPage() {
               
               <h1 className="mb-4 text-5xl font-bold tracking-tight sm:text-7xl md:text-9xl">
                 <span className="block bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 bg-clip-text text-transparent">
-                  ED CELL
+                  Entrepreneurship and Development
                 </span>
-                <span className="block text-white">2.0</span>
+                <span className="block text-white">Cell</span>
               </h1>
               
               <p className="mx-auto max-w-2xl text-lg text-gray-400 sm:text-xl">
