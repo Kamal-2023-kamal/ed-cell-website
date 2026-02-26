@@ -1,7 +1,7 @@
  "use client"
  
  import { useEffect, useMemo, useState } from "react"
- import { Calendar, Clock, MapPin, Image as ImageIcon } from "lucide-react"
+ import { Calendar, Clock, MapPin, Image as ImageIcon, Share2, CalendarPlus } from "lucide-react"
  import { Badge } from "@/components/ui/badge"
  import { Button } from "@/components/ui/button"
  import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -41,6 +41,7 @@
    const [gallery, setGallery] = useState<GalleryItem[]>([])
    const [open, setOpen] = useState(false)
    const [selected, setSelected] = useState<EventItem | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string>("All")
  
    useEffect(() => {
      const fetchAll = async () => {
@@ -95,7 +96,63 @@
      })
    }, [selected, gallery])
  
-   return (
+  const filteredEvents = useMemo(() => {
+    if (statusFilter === "All") return events
+    return events.filter((e) => (e.status || "").toLowerCase() === statusFilter.toLowerCase())
+  }, [events, statusFilter])
+
+  function datesForCalendar(date: string, time?: string) {
+    const d = (date || "").replace(/-/g, "")
+    if (!d) return { g: "", iStart: "", iEnd: "" }
+    if (!time) {
+      const start = d
+      const end = d
+      return { g: `${start}/${end}`, iStart: `${start}`, iEnd: `${end}` }
+    }
+    const t = (time || "").replace(":", "")
+    const hh = t.slice(0, 2) || "00"
+    const mm = t.slice(2, 4) || "00"
+    const start = `${d}T${hh}${mm}00`
+    const end = `${d}T${hh}${mm}00`
+    return { g: `${start}/${end}`, iStart: start, iEnd: end }
+  }
+
+  function googleCalUrl(e: EventItem) {
+    const { g } = datesForCalendar(e.date, e.time)
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: e.title || "",
+      dates: g || "",
+      details: e.description || "",
+      location: e.location || "",
+    })
+    return `https://calendar.google.com/calendar/render?${params.toString()}`
+  }
+
+  function icsDataUrl(e: EventItem) {
+    const { iStart, iEnd } = datesForCalendar(e.date, e.time)
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      `SUMMARY:${e.title || ""}`,
+      iStart ? `DTSTART:${iStart}` : "",
+      iEnd ? `DTEND:${iEnd}` : "",
+      `LOCATION:${e.location || ""}`,
+      `DESCRIPTION:${e.description || ""}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].filter(Boolean)
+    return `data:text/calendar;charset=utf-8,${encodeURIComponent(lines.join("\r\n"))}`
+  }
+
+  function shareText(e: EventItem) {
+    const url = typeof window !== "undefined" ? window.location.origin + "/events" : ""
+    const parts = [e.title || "", e.date || "", e.time || "", e.location ? `at ${e.location}` : "", url].filter(Boolean)
+    return encodeURIComponent(parts.join(" ").replace(/\s+/g, " ").trim())
+  }
+
+  return (
      <div className="relative min-h-screen bg-background">
        <div className="mx-auto max-w-7xl px-6 py-12">
          <div className="text-center">
@@ -108,11 +165,25 @@
            </p>
          </div>
  
-         {events.length === 0 ? (
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          {["All", "Registrations Open", "Registrations Closed", "Completed"].map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`rounded-full border px-3 py-1 text-xs ${
+                statusFilter === s ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {filteredEvents.length === 0 ? (
            <div className="mt-16 text-center text-sm text-muted-foreground">No events found.</div>
          ) : (
            <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-             {events.map((event) => (
+            {filteredEvents.map((event) => (
                <Card
                  key={event.id || event.title}
                  className="cursor-pointer transition hover:border-accent/40 hover:shadow-lg"
@@ -212,6 +283,37 @@
                  </p>
                </div>
  
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" className="gap-2">
+                  <a href={googleCalUrl(selected)} target="_blank" rel="noreferrer">
+                    <CalendarPlus className="h-4 w-4" />
+                    Google Calendar
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="gap-2">
+                  <a href={icsDataUrl(selected)} download={(selected.title || "event") + ".ics"}>
+                    <CalendarPlus className="h-4 w-4" />
+                    Download ICS
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="gap-2">
+                  <a href={`https://wa.me/?text=${shareText(selected)}`} target="_blank" rel="noreferrer">
+                    <Share2 className="h-4 w-4" />
+                    WhatsApp
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="gap-2">
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${shareText(selected)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    X
+                  </a>
+                </Button>
+              </div>
+
                <div>
                  <div className="flex items-center justify-between">
                    <div className="text-lg font-semibold text-foreground">Event Gallery</div>

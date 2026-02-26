@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { X } from "lucide-react"
 
 type GalleryItem = {
@@ -16,6 +16,7 @@ type GalleryItem = {
 export function GallerySection() {
   const [images, setImages] = useState<GalleryItem[]>([])
   const [selectedImage, setSelectedImage] = useState<number | null>(null)
+  const [tag, setTag] = useState<string>("All")
 
   useEffect(() => {
     const fetchGallery = async () => {
@@ -34,7 +35,7 @@ export function GallerySection() {
             tags: i.tags ?? "",
             visible: i.visible !== false,
           }))
-          .filter((i) => i.visible)
+          .filter((i: GalleryItem) => i.visible)
           
         setImages(visibleItems)
       } catch (err) {
@@ -45,6 +46,29 @@ export function GallerySection() {
 
     fetchGallery()
   }, [])
+
+  const tags = useMemo(() => {
+    const set = new Set<string>()
+    images.forEach((img) => {
+      const parts = (img.tags || "")
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean)
+      parts.forEach((p) => set.add(p))
+    })
+    return ["All", ...Array.from(set).sort()]
+  }, [images])
+
+  const filtered = useMemo(() => {
+    if (tag === "All") return images
+    return images.filter((img) => {
+      const parts = (img.tags || "")
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean)
+      return parts.includes(tag.toLowerCase())
+    })
+  }, [images, tag])
 
   return (
     <section id="gallery" className="relative py-24">
@@ -67,8 +91,22 @@ export function GallerySection() {
             No gallery images yet. Add images from the admin dashboard.
           </p>
         ) : (
-          <div className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {images.map((image, index) => (
+          <>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTag(t)}
+                  className={`rounded-full border px-3 py-1 text-xs ${
+                    tag === t ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((image, index) => (
               <button
                 key={image.src}
                 onClick={() => setSelectedImage(index)}
@@ -88,8 +126,9 @@ export function GallerySection() {
                   </p>
                 </div>
               </button>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

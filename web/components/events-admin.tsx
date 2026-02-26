@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Pencil, Trash2, Copy, Calendar as CalendarIcon } from "lucide-react"
+import { Plus, Pencil, Trash2, Copy, Calendar as CalendarIcon, Eye } from "lucide-react"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { supabase } from "@/lib/supabase-client"
@@ -34,6 +34,7 @@ import { supabase } from "@/lib/supabase-client"
    const [events, setEvents] = useState<EventItem[]>([])
    const [open, setOpen] = useState(false)
    const [editing, setEditing] = useState<EventItem | null>(null)
+  const [preview, setPreview] = useState<EventItem | null>(null)
    const [form, setForm] = useState<EventItem>({
      id: "",
      title: "",
@@ -184,6 +185,52 @@ import { supabase } from "@/lib/supabase-client"
     setEditing(e)
     setForm(e)
     setOpen(true)
+  }
+ 
+  const onDuplicate = async (e: EventItem) => {
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${e.title} (Copy)`,
+          date: e.date,
+          time: e.time,
+          location: e.location,
+          description: e.description,
+          status: e.status,
+          registrationLink: e.registrationLink || "",
+          imageUrl: e.imageUrl || "",
+          order_index: 0,
+        }),
+      })
+      let created: any = null
+      if (res.ok) {
+        const j = await res.json()
+        created = j?.data || null
+      }
+      const item: EventItem = created
+        ? {
+            id: created.id,
+            title: created.title ?? e.title,
+            date: created.date ?? e.date,
+            time: created.time ?? e.time,
+            location: created.location ?? e.location,
+            description: created.description ?? e.description,
+            status: created.status ?? e.status,
+            registrationLink: created.registration_link ?? e.registrationLink,
+            imageUrl: created.image_url ?? e.imageUrl,
+          }
+        : { ...e, id: uuid(), title: `${e.title} (Copy)` }
+      const list = [item, ...events]
+      await persistOrder(list)
+    } catch {
+      alert("Duplicate failed")
+    }
+  }
+ 
+  const onPreview = (e: EventItem) => {
+    setPreview(e)
   }
  
   const onDelete = async (id: string) => {
@@ -430,6 +477,14 @@ import { supabase } from "@/lib/supabase-client"
                      </TableCell>
                      <TableCell className="text-right">
                        <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => onPreview(e)} className="gap-2">
+                          <Eye className="h-4 w-4" />
+                          Preview
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => onDuplicate(e)} className="gap-2">
+                          <Copy className="h-4 w-4" />
+                          Duplicate
+                        </Button>
                          <Button variant="outline" size="sm" onClick={() => onEdit(e)} className="gap-2">
                            <Pencil className="h-4 w-4" />
                            Edit
@@ -551,6 +606,36 @@ import { supabase } from "@/lib/supabase-client"
               <Button onClick={onSave}>Save</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+ 
+      <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{preview?.title}</DialogTitle>
+          </DialogHeader>
+          {preview ? (
+            <div className="space-y-4 text-sm text-muted-foreground">
+              {preview.imageUrl ? (
+                <img src={preview.imageUrl} alt={preview.title} className="h-56 w-full rounded object-cover" />
+              ) : null}
+              <div className="grid gap-2 sm:grid-cols-3">
+                {preview.date ? <div>{preview.date}</div> : null}
+                {preview.time ? <div>{preview.time}</div> : null}
+                {preview.location ? <div>{preview.location}</div> : null}
+              </div>
+              <div className="text-foreground whitespace-pre-line">{preview.description}</div>
+              {preview.registrationLink ? (
+                <div className="flex justify-end">
+                  <Button asChild>
+                    <a href={preview.registrationLink} target="_blank" rel="noreferrer">
+                      Open Registration
+                    </a>
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
      </div>
