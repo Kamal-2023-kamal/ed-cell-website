@@ -58,37 +58,12 @@ export function TeamAdmin() {
               photoUrl: m.photo_url ?? "",
             })),
           )
-          try {
-            localStorage.setItem("ed_cell_team", JSON.stringify(data))
-          } catch {}
           return
         }
       } catch (err: any) {
         console.error("API fetch failed:", err)
       }
-      try {
-        const cached = localStorage.getItem("ed_cell_team")
-        if (cached) {
-          const parsed = JSON.parse(cached)
-          const list = Array.isArray(parsed) ? parsed : []
-          setMembers(
-            list.map((m: any) => ({
-              id: m.id || m.id === "" ? m.id : uuid(),
-              name: m.name ?? "",
-              role: m.role ?? "",
-              department: m.department ?? "",
-              initials: m.initials ?? "",
-              email: m.email ?? "",
-              linkedin: m.linkedin ?? "",
-              photoUrl: m.photo_url ?? m.photoUrl ?? "",
-            })),
-          )
-        } else {
-          setMembers([])
-        }
-      } catch {
-        setMembers([])
-      }
+      setMembers([])
     }
     fetchMembers()
   }, [])
@@ -112,9 +87,6 @@ export function TeamAdmin() {
               photoUrl: m.photo_url ?? "",
             })),
           )
-          try {
-            localStorage.setItem("ed_cell_team", JSON.stringify(data))
-          } catch {}
         }
       } catch {}
     }
@@ -145,7 +117,6 @@ export function TeamAdmin() {
         body: JSON.stringify(payload),
       })
     } catch {}
-    try { localStorage.setItem("ed_cell_team", JSON.stringify(list)) } catch {}
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("edcell-admin-data-changed"))
     }

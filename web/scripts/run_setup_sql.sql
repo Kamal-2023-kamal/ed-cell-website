@@ -78,6 +78,8 @@ BEGIN
 
   ALTER TABLE ed_cell_events ENABLE ROW LEVEL SECURITY;
 
+  ALTER TABLE ed_cell_events ADD COLUMN IF NOT EXISTS team_size INTEGER DEFAULT 1;
+
   DROP POLICY IF EXISTS "Events insert (authenticated)" ON ed_cell_events;
   CREATE POLICY "Events insert (authenticated)" ON ed_cell_events
     FOR INSERT
@@ -211,5 +213,47 @@ BEGIN
     FOR SELECT
     TO authenticated
     USING (true);
+
+  -- =========================
+  -- Event RSVPs
+  -- =========================
+  CREATE TABLE IF NOT EXISTS ed_cell_event_rsvps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES ed_cell_events(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    ticket_code TEXT UNIQUE NOT NULL,
+    checked_in BOOLEAN DEFAULT FALSE,
+    checkin_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ed_cell_event_rsvps_event ON ed_cell_event_rsvps(event_id);
+  CREATE INDEX IF NOT EXISTS idx_ed_cell_event_rsvps_ticket ON ed_cell_event_rsvps(ticket_code);
+
+  ALTER TABLE ed_cell_event_rsvps ENABLE ROW LEVEL SECURITY;
+
+  ALTER TABLE ed_cell_event_rsvps ADD COLUMN IF NOT EXISTS register_number TEXT;
+  ALTER TABLE ed_cell_event_rsvps ADD COLUMN IF NOT EXISTS phone TEXT;
+  ALTER TABLE ed_cell_event_rsvps ADD COLUMN IF NOT EXISTS team_members JSONB DEFAULT '[]'::jsonb;
+
+  DROP POLICY IF EXISTS "RSVP insert (public)" ON ed_cell_event_rsvps;
+  CREATE POLICY "RSVP insert (public)" ON ed_cell_event_rsvps
+    FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "RSVP read (authenticated)" ON ed_cell_event_rsvps;
+  CREATE POLICY "RSVP read (authenticated)" ON ed_cell_event_rsvps
+    FOR SELECT
+    TO authenticated
+    USING (true);
+
+  DROP POLICY IF EXISTS "RSVP update (authenticated)" ON ed_cell_event_rsvps;
+  CREATE POLICY "RSVP update (authenticated)" ON ed_cell_event_rsvps
+    FOR UPDATE
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
 END;
 $$ LANGUAGE plpgsql;

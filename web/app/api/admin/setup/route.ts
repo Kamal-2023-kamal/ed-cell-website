@@ -10,6 +10,8 @@ export async function POST(request: Request) {
     if (!adminSecret || secret !== adminSecret) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
+    const url = new URL(request.url)
+    const force = url.searchParams.get("force") === "1"
 
     // Ensure storage bucket exists and is public
     const { data: buckets, error: listErr } = await supabase.storage.listBuckets()
@@ -24,28 +26,29 @@ export async function POST(request: Request) {
     const { error: bootErr } = await supabase.rpc("run_setup_bootstrap")
     if (bootErr) throw bootErr
 
-    // Check status
-    const { data: status, error: selErr } = await supabase
-      .from("setup_status")
-      .select("initialized")
-      .eq("id", true)
-      .single()
-    if (selErr) throw selErr
-
-    if (status?.initialized) {
-      return NextResponse.json({ message: "Already initialized" })
+    if (!force) {
+      const { data: status, error: selErr } = await supabase
+        .from("setup_status")
+        .select("initialized")
+        .eq("id", true)
+        .single()
+      if (selErr) throw selErr
+      if (status?.initialized) {
+        return NextResponse.json({ message: "Already initialized" })
+      }
     }
 
     // Run main setup
     const { error: setupErr } = await supabase.rpc("run_setup_sql")
     if (setupErr) throw setupErr
 
-    // Mark initialized
-    const { error: updErr } = await supabase
-      .from("setup_status")
-      .update({ initialized: true })
-      .eq("id", true)
-    if (updErr) throw updErr
+    if (!force) {
+      const { error: updErr } = await supabase
+        .from("setup_status")
+        .update({ initialized: true })
+        .eq("id", true)
+      if (updErr) throw updErr
+    }
 
     return NextResponse.json({ message: "Setup completed successfully" })
   } catch (error: any) {

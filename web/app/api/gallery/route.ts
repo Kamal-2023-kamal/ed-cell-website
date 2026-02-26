@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin"
 
+let cacheData: any[] | null = null
+let cacheAt = 0
+const ttlMs = 15000
+
 const ItemSchema = z.object({
   src: z.string().min(1),
   alt: z.string().optional().default(""),
@@ -13,6 +17,12 @@ const ItemSchema = z.object({
 
 export async function GET() {
   try {
+    const now = Date.now()
+    if (cacheData && now - cacheAt < ttlMs) {
+      return new NextResponse(JSON.stringify({ data: cacheData }), {
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=0, s-maxage=15, stale-while-revalidate=60" },
+      })
+    }
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
     if (!url || !key) {
@@ -24,7 +34,11 @@ export async function GET() {
       .order("order_index", { ascending: true })
       .order("created_at", { ascending: false })
     if (error) throw error
-    return NextResponse.json({ data })
+    cacheData = data || []
+    cacheAt = Date.now()
+    return new NextResponse(JSON.stringify({ data: cacheData }), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=0, s-maxage=15, stale-while-revalidate=60" },
+    })
   } catch (error: any) {
     console.error("[api/gallery] GET error:", error?.message || error)
     return NextResponse.json({ data: [] })

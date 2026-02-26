@@ -17,6 +17,7 @@
    status: string
    registrationLink?: string
    imageUrl?: string
+   teamSize?: number
  }
  
  type GalleryItem = {
@@ -42,6 +43,14 @@
    const [open, setOpen] = useState(false)
    const [selected, setSelected] = useState<EventItem | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>("All")
+  const [rsvpName, setRsvpName] = useState("")
+  const [rsvpEmail, setRsvpEmail] = useState("")
+  const [rsvpQr, setRsvpQr] = useState<string | null>(null)
+  const [rsvpCode, setRsvpCode] = useState<string | null>(null)
+  const [rsvpLoading, setRsvpLoading] = useState(false)
+  const [rsvpRegNo, setRsvpRegNo] = useState("")
+  const [rsvpPhone, setRsvpPhone] = useState("")
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; regNo?: string }>>([])
  
    useEffect(() => {
      const fetchAll = async () => {
@@ -62,6 +71,7 @@
              status: e.status ?? "Coming Soon",
              registrationLink: e.registration_link ?? "",
              imageUrl: e.image_url ?? "",
+            teamSize: e.team_size ?? 1,
            })),
          )
          setGallery(
@@ -313,6 +323,143 @@
                   </a>
                 </Button>
               </div>
+
+              {!selected.registrationLink ? (
+                <div className="rounded-lg border border-border p-4">
+                  <div className="text-lg font-semibold text-foreground">RSVP</div>
+                  {rsvpQr ? (
+                    <div className="mt-3 flex items-center gap-4">
+                      <img src={rsvpQr} alt="Ticket QR" className="h-36 w-36 rounded border" />
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Ticket Code</div>
+                        <div className="font-mono text-lg">{rsvpCode}</div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Save this code and show the QR at check‑in.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <input
+                        className="h-10 rounded border border-border bg-background px-3 text-sm"
+                        placeholder="Full name"
+                        value={rsvpName}
+                        onChange={(e) => setRsvpName(e.target.value)}
+                      />
+                      <input
+                        className="h-10 rounded border border-border bg-background px-3 text-sm"
+                        placeholder="Email"
+                        type="email"
+                        value={rsvpEmail}
+                        onChange={(e) => setRsvpEmail(e.target.value)}
+                      />
+                      <input
+                        className="h-10 rounded border border-border bg-background px-3 text-sm"
+                        placeholder="Register number"
+                        value={rsvpRegNo}
+                        onChange={(e) => setRsvpRegNo(e.target.value)}
+                      />
+                      <input
+                        className="h-10 rounded border border-border bg-background px-3 text-sm"
+                        placeholder="Phone number"
+                        value={rsvpPhone}
+                        onChange={(e) => setRsvpPhone(e.target.value)}
+                      />
+                      <div className="sm:col-span-2">
+                        <div className="text-sm font-medium text-foreground">
+                          Team members (optional)
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Up to {(selected.teamSize || 1) - 1} additional members
+                        </div>
+                        <div className="mt-2 space-y-2">
+                          {teamMembers.map((m, idx) => (
+                            <div key={idx} className="grid gap-2 sm:grid-cols-2">
+                              <input
+                                className="h-9 rounded border border-border bg-background px-3 text-sm"
+                                placeholder="Member name"
+                                value={m.name}
+                                onChange={(e) => {
+                                  const next = [...teamMembers]
+                                  next[idx] = { ...next[idx], name: e.target.value }
+                                  setTeamMembers(next)
+                                }}
+                              />
+                              <input
+                                className="h-9 rounded border border-border bg-background px-3 text-sm"
+                                placeholder="Register number (optional)"
+                                value={m.regNo || ""}
+                                onChange={(e) => {
+                                  const next = [...teamMembers]
+                                  next[idx] = { ...next[idx], regNo: e.target.value }
+                                  setTeamMembers(next)
+                                }}
+                              />
+                            </div>
+                          ))}
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              type="button"
+                              disabled={teamMembers.length >= Math.max(0, (selected.teamSize || 1) - 1)}
+                              onClick={() => setTeamMembers([...teamMembers, { name: "", regNo: "" }])}
+                            >
+                              Add member
+                            </Button>
+                            {teamMembers.length > 0 ? (
+                              <Button
+                                variant="outline"
+                                type="button"
+                                onClick={() => setTeamMembers(teamMembers.slice(0, -1))}
+                              >
+                                Remove last
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button
+                          disabled={!rsvpName || !rsvpEmail || !rsvpRegNo || !rsvpPhone || rsvpLoading}
+                          onClick={async () => {
+                            if (!selected?.id) return
+                            setRsvpLoading(true)
+                            try {
+                              const res = await fetch(`/api/events/${selected.id}/rsvp`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  fullName: rsvpName,
+                                  email: rsvpEmail,
+                                  registerNumber: rsvpRegNo,
+                                  phone: rsvpPhone,
+                                  teamMembers: teamMembers.filter((m) => m.name.trim()),
+                                }),
+                              })
+                              const json = await res.json().catch(() => ({} as any))
+                              if (res.ok) {
+                                setRsvpQr(json.qr || null)
+                                setRsvpCode(json.ticketCode || null)
+                              } else {
+                                const msg =
+                                  (json && (json.error || json.message)) ||
+                                  "Unable to RSVP"
+                                alert(msg)
+                              }
+                            } catch {
+                              alert("Unable to RSVP")
+                            } finally {
+                              setRsvpLoading(false)
+                            }
+                          }}
+                        >
+                          {rsvpLoading ? "Submitting..." : "Get Ticket"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
                <div>
                  <div className="flex items-center justify-between">

@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Pencil, Trash2, Copy, Calendar as CalendarIcon, Eye } from "lucide-react"
+import { Plus, Pencil, Trash2, Copy, Calendar as CalendarIcon, Eye, Users as UsersIcon, QrCode } from "lucide-react"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { supabase } from "@/lib/supabase-client"
@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase-client"
   status: string
   registrationLink?: string
   imageUrl?: string
+  teamSize?: number
  }
  
  function uuid() {
@@ -35,7 +36,11 @@ import { supabase } from "@/lib/supabase-client"
    const [open, setOpen] = useState(false)
    const [editing, setEditing] = useState<EventItem | null>(null)
   const [preview, setPreview] = useState<EventItem | null>(null)
-   const [form, setForm] = useState<EventItem>({
+  const [rsvpsOpen, setRsvpsOpen] = useState(false)
+  const [rsvpsEvent, setRsvpsEvent] = useState<EventItem | null>(null)
+  const [rsvps, setRsvps] = useState<Array<{id:string;full_name:string;email:string;ticket_code:string;checked_in:boolean;checkin_at:string|null;created_at:string}>>([])
+  const [ticketCode, setTicketCode] = useState("")
+  const [form, setForm] = useState<EventItem>({
      id: "",
      title: "",
      date: "",
@@ -44,6 +49,7 @@ import { supabase } from "@/lib/supabase-client"
      description: "",
     status: "",
     registrationLink: "",
+   teamSize: 1,
    })
  
   useEffect(() => {
@@ -53,51 +59,28 @@ import { supabase } from "@/lib/supabase-client"
         if (res.ok) {
           const json = await res.json()
           const data = Array.isArray(json.data) ? json.data : []
-          setEvents(
-            data.map((e: any) => ({
-              id: e.id,
-              title: e.title ?? "",
-              date: e.date ?? "",
-              time: e.time ?? "",
-              location: e.location ?? "",
-              description: e.description ?? "",
-              status: e.status ?? "Coming Soon",
-              registrationLink: e.registration_link ?? "",
-              imageUrl: e.image_url ?? "",
-            })),
-          )
-          try {
-            localStorage.setItem("ed_cell_events", JSON.stringify(data))
-          } catch {}
-          return
+          if (data.length > 0) {
+            setEvents(
+              data.map((e: any) => ({
+                id: e.id,
+                title: e.title ?? "",
+                date: e.date ?? "",
+                time: e.time ?? "",
+                location: e.location ?? "",
+                description: e.description ?? "",
+                status: e.status ?? "Coming Soon",
+                registrationLink: e.registration_link ?? "",
+                imageUrl: e.image_url ?? "",
+                teamSize: e.team_size ?? 1,
+              })),
+            )
+            return
+          }
         }
       } catch (err: any) {
         console.error("API fetch failed:", err)
       }
-      try {
-        const cached = localStorage.getItem("ed_cell_events")
-        if (cached) {
-          const parsed = JSON.parse(cached)
-          const list = Array.isArray(parsed) ? parsed : []
-          setEvents(
-            list.map((e: any) => ({
-              id: e.id || e.id === "" ? e.id : uuid(),
-              title: e.title ?? "",
-              date: e.date ?? "",
-              time: e.time ?? "",
-              location: e.location ?? "",
-              description: e.description ?? "",
-              status: e.status ?? "Coming Soon",
-              registrationLink: e.registration_link ?? e.registrationLink ?? "",
-              imageUrl: e.image_url ?? e.imageUrl ?? "",
-            })),
-          )
-        } else {
-          setEvents([])
-        }
-      } catch {
-        setEvents([])
-      }
+      setEvents([])
     }
     fetchEvents()
   }, [])
@@ -109,22 +92,22 @@ import { supabase } from "@/lib/supabase-client"
         if (res.ok) {
           const json = await res.json()
           const data = Array.isArray(json.data) ? json.data : []
-          setEvents(
-            data.map((e: any) => ({
-              id: e.id,
-              title: e.title ?? "",
-              date: e.date ?? "",
-              time: e.time ?? "",
-              location: e.location ?? "",
-              description: e.description ?? "",
-              status: e.status ?? "Coming Soon",
-              registrationLink: e.registration_link ?? "",
-              imageUrl: e.image_url ?? "",
-            })),
-          )
-          try {
-            localStorage.setItem("ed_cell_events", JSON.stringify(data))
-          } catch {}
+          if (data.length > 0) {
+            setEvents(
+              data.map((e: any) => ({
+                id: e.id,
+                title: e.title ?? "",
+                date: e.date ?? "",
+                time: e.time ?? "",
+                location: e.location ?? "",
+                description: e.description ?? "",
+                status: e.status ?? "Coming Soon",
+                registrationLink: e.registration_link ?? "",
+                imageUrl: e.image_url ?? "",
+                teamSize: e.team_size ?? 1,
+              })),
+            )
+          }
         }
       } catch {}
     }
@@ -140,8 +123,22 @@ import { supabase } from "@/lib/supabase-client"
       )
       .subscribe()
 
+    const rsvpChannel = supabase
+      .channel("admin-rsvps")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ed_cell_event_rsvps" },
+        () => {
+          if (rsvpsEvent) {
+            loadRsvps(rsvpsEvent)
+          }
+        },
+      )
+      .subscribe()
+
     return () => {
       supabase.removeChannel(channel)
+      supabase.removeChannel(rsvpChannel)
     }
   }, [])
  
@@ -156,9 +153,6 @@ import { supabase } from "@/lib/supabase-client"
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-    } catch {}
-    try {
-      localStorage.setItem("ed_cell_events", JSON.stringify(list))
     } catch {}
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("edcell-admin-data-changed"))
@@ -177,6 +171,7 @@ import { supabase } from "@/lib/supabase-client"
       status: "Registrations Open",
       registrationLink: "",
       imageUrl: "",
+      teamSize: 1,
     })
      setOpen(true)
    }
@@ -232,6 +227,43 @@ import { supabase } from "@/lib/supabase-client"
   const onPreview = (e: EventItem) => {
     setPreview(e)
   }
+
+  const loadRsvps = async (e: EventItem) => {
+    try {
+      const res = await fetch(`/api/events/${e.id}/rsvps`)
+      if (!res.ok) throw new Error("Failed to load RSVPs")
+      const json = await res.json()
+      const data = Array.isArray(json.data) ? json.data : []
+      setRsvps(data)
+    } catch {
+      setRsvps([])
+    }
+  }
+
+  const openRsvps = async (e: EventItem) => {
+    setRsvpsEvent(e)
+    await loadRsvps(e)
+    setRsvpsOpen(true)
+  }
+
+  const submitCheckin = async () => {
+    if (!rsvpsEvent || !ticketCode.trim()) return
+    try {
+      const res = await fetch(`/api/events/${rsvpsEvent.id}/rsvps/checkin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketCode: ticketCode.trim(), checkedIn: true }),
+      })
+      if (res.ok) {
+        await loadRsvps(rsvpsEvent)
+        setTicketCode("")
+      } else {
+        alert("Invalid code")
+      }
+    } catch {
+      alert("Check-in failed")
+    }
+  }
  
   const onDelete = async (id: string) => {
     try {
@@ -264,9 +296,6 @@ import { supabase } from "@/lib/supabase-client"
             imageUrl: e.image_url ?? "",
           })),
         )
-        try {
-          localStorage.setItem("ed_cell_events", JSON.stringify(data))
-        } catch {}
       }
     } catch {}
     if (typeof window !== "undefined") {
@@ -279,20 +308,34 @@ import { supabase } from "@/lib/supabase-client"
     if (editing) {
       const item: EventItem = { ...base, id: editing.id || base.id || uuid() }
       try {
-        await fetch(`/api/events/${editing.id}`, {
+        const payload = {
+          title: item.title,
+          date: item.date,
+          time: item.time,
+          location: item.location,
+          description: item.description,
+          status: item.status,
+          registrationLink: item.registrationLink,
+          imageUrl: item.imageUrl,
+          teamSize: item.teamSize,
+        }
+        let res = await fetch(`/api/events/${editing.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: item.title,
-            date: item.date,
-            time: item.time,
-            location: item.location,
-            description: item.description,
-            status: item.status,
-            registrationLink: item.registrationLink,
-            imageUrl: item.imageUrl,
-          }),
+          body: JSON.stringify(payload),
         })
+        if (!res.ok) {
+          // Fallback: try without teamSize in case column isn't created yet
+          const { teamSize, ...fallbackPayload } = payload as any
+          res = await fetch(`/api/events/${editing.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(fallbackPayload),
+          })
+          if (!res.ok) {
+            alert("Update failed on server. Check your Supabase keys and run admin setup.")
+          }
+        }
       } catch {}
       const next = events.map((e) => (e.id === editing.id ? item : e))
       await persistOrder(next)
@@ -304,24 +347,41 @@ import { supabase } from "@/lib/supabase-client"
         status: base.status || "Registrations Open",
       }
       try {
-        const res = await fetch("/api/events", {
+        const createPayload: any = {
+          title: fallback.title,
+          date: fallback.date,
+          time: fallback.time,
+          location: fallback.location,
+          description: fallback.description,
+          status: fallback.status,
+          registrationLink: fallback.registrationLink,
+          imageUrl: fallback.imageUrl,
+          order_index: 0,
+          teamSize: fallback.teamSize || 1,
+        }
+        let res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: fallback.title,
-            date: fallback.date,
-            time: fallback.time,
-            location: fallback.location,
-            description: fallback.description,
-            status: fallback.status,
-            registrationLink: fallback.registrationLink,
-            imageUrl: fallback.imageUrl,
-            order_index: 0,
-          }),
+          body: JSON.stringify(createPayload),
         })
         if (res.ok) {
           const json = await res.json()
           created = json?.data || null
+        } else {
+          // Fallback: try without teamSize in case column isn't created yet
+          const { teamSize, ...noTeam } = createPayload
+          res = await fetch("/api/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(noTeam),
+          })
+          if (res.ok) {
+            const json = await res.json()
+            created = json?.data || null
+          } else {
+            const msg = await res.text().catch(() => "")
+            alert("Create failed on server. Check Supabase keys and run admin setup. " + msg)
+          }
         }
       } catch {}
       const item: EventItem = created
@@ -335,6 +395,7 @@ import { supabase } from "@/lib/supabase-client"
             status: created.status ?? fallback.status,
             registrationLink: created.registration_link ?? fallback.registrationLink,
             imageUrl: created.image_url ?? fallback.imageUrl,
+            teamSize: created.team_size ?? fallback.teamSize ?? 1,
           }
         : fallback
       const next = [item, ...events]
@@ -477,6 +538,10 @@ import { supabase } from "@/lib/supabase-client"
                      </TableCell>
                      <TableCell className="text-right">
                        <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openRsvps(e)} className="gap-2">
+                          <UsersIcon className="h-4 w-4" />
+                          RSVPs
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => onPreview(e)} className="gap-2">
                           <Eye className="h-4 w-4" />
                           Preview
@@ -586,6 +651,25 @@ import { supabase } from "@/lib/supabase-client"
              value={form.registrationLink || ""}
              onChange={(e) => setForm({ ...form, registrationLink: e.target.value })}
            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <div className="text-sm font-medium">Team size (max)</div>
+              <Input
+                type="number"
+                min={1}
+                value={form.teamSize || 1}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    teamSize: Math.max(1, parseInt(e.target.value || "1", 10)),
+                  })
+                }
+              />
+              <div className="mt-1 text-xs text-muted-foreground">
+                Max members per team, including the leader
+              </div>
+            </div>
+          </div>
             <div className="space-y-2">
               <div className="text-sm font-medium">Event Image URL</div>
               {form.imageUrl ? (
@@ -636,6 +720,105 @@ import { supabase } from "@/lib/supabase-client"
               ) : null}
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rsvpsOpen} onOpenChange={(v) => !v && setRsvpsOpen(false)}>
+        <DialogContent className="w-[96vw] sm:max-w-3xl md:max-w-4xl lg:max-w-5xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle>RSVPs — {rsvpsEvent?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Enter ticket code"
+                value={ticketCode}
+                onChange={(e) => setTicketCode(e.target.value)}
+                className="max-w-xs"
+              />
+              <Button onClick={submitCheckin} className="gap-2">
+                <QrCode className="h-4 w-4" />
+                Check In
+              </Button>
+              <div className="ml-auto text-xs text-muted-foreground">
+                {rsvps.filter((r) => r.checked_in).length} / {rsvps.length} checked in
+              </div>
+            </div>
+            <div className="rounded-lg border overflow-hidden">
+              <Table className="w-full min-w-[880px]">
+                <TableHeader>
+                  <TableRow className="bg-secondary/30">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Register #</TableHead>
+                    <TableHead className="w-[24rem]">Email</TableHead>
+                    <TableHead className="w-[10rem]">Phone</TableHead>
+                    <TableHead>Team</TableHead>
+                    <TableHead className="w-[10rem]">Ticket</TableHead>
+                    <TableHead>Checked In</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rsvps.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
+                        No RSVPs yet
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rsvps.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="max-w-[12rem] truncate">{r.full_name}</TableCell>
+                        <TableCell className="text-muted-foreground max-w-[10rem] truncate">
+                          {(r as any).register_number || "-"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground max-w-[24rem] truncate">
+                          {r.email}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground max-w-[10rem] truncate">
+                          {(r as any).phone || "-"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground max-w-[14rem] truncate">
+                          {Array.isArray((r as any).team_members) && (r as any).team_members.length > 0
+                            ? ((r as any).team_members.map((m: any) => m.name).join(", "))
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs max-w-[10rem] truncate">{r.ticket_code}</TableCell>
+                        <TableCell>
+                          {r.checked_in ? (
+                            <span className="text-green-600">Yes</span>
+                          ) : (
+                            <span className="text-yellow-600">No</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {!r.checked_in ? (
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/events/${rsvpsEvent?.id}/rsvps/checkin`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ ticketCode: r.ticket_code, checkedIn: true }),
+                                  })
+                                  if (res.ok) {
+                                    await loadRsvps(rsvpsEvent!)
+                                  }
+                                } catch {}
+                              }}
+                            >
+                              Mark
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
      </div>

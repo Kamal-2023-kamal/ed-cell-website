@@ -53,35 +53,12 @@ export function GalleryAdmin() {
               visible: i.visible !== false,
             })),
           )
-          try {
-            localStorage.setItem("ed_cell_gallery", JSON.stringify(data))
-          } catch {}
           return
         }
       } catch (err: any) {
         console.error("API fetch failed:", err)
       }
-      try {
-        const cached = localStorage.getItem("ed_cell_gallery")
-        if (cached) {
-          const parsed = JSON.parse(cached)
-          const list = Array.isArray(parsed) ? parsed : []
-          setItems(
-            list.map((i: any) => ({
-              id: i.id || i.id === "" ? i.id : uuid(),
-              src: i.src ?? "",
-              alt: i.alt ?? "",
-              caption: i.caption ?? "",
-              tags: i.tags ?? "",
-              visible: i.visible !== false,
-            })),
-          )
-        } else {
-          setItems([])
-        }
-      } catch {
-        setItems([])
-      }
+      setItems([])
     }
     fetchItems()
   }, [])
@@ -103,9 +80,6 @@ export function GalleryAdmin() {
               visible: i.visible !== false,
             })),
           )
-          try {
-            localStorage.setItem("ed_cell_gallery", JSON.stringify(data))
-          } catch {}
         }
       } catch {}
     }
@@ -136,7 +110,6 @@ export function GalleryAdmin() {
         body: JSON.stringify(payload),
       })
     } catch {}
-    try { localStorage.setItem("ed_cell_gallery", JSON.stringify(list)) } catch {}
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("edcell-admin-data-changed"))
     }

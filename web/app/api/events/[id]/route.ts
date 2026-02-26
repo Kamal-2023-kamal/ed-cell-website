@@ -12,6 +12,7 @@ const UpdateSchema = z.object({
   registrationLink: z.string().optional(),
   imageUrl: z.string().optional(),
   order_index: z.number().int().nonnegative().optional(),
+  teamSize: z.number().int().positive().optional(),
 })
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -33,8 +34,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (body.registrationLink !== undefined) update.registration_link = body.registrationLink
     if (body.imageUrl !== undefined) update.image_url = body.imageUrl
     if (body.order_index !== undefined) update.order_index = body.order_index
-    const { error } = await supabase.from("ed_cell_events").update(update).eq("id", id)
-    if (error) throw error
+    if (body.teamSize !== undefined) update.team_size = body.teamSize
+    let res = await supabase.from("ed_cell_events").update(update).eq("id", id)
+    if (res.error && String(res.error.message || "").toLowerCase().includes("team_size")) {
+      // Fallback: retry without team_size when the column is missing
+      delete (update as any).team_size
+      res = await supabase.from("ed_cell_events").update(update).eq("id", id)
+    }
+    if (res.error) throw res.error
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Failed to update event" }, { status: 500 })
