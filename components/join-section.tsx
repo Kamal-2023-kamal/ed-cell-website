@@ -36,6 +36,7 @@ export function JoinSection() {
   const [registerError, setRegisterError] = useState("")
   const [emailError, setEmailError] = useState("")
   const [interests, setInterests] = useState<string[]>([])
+  const [department, setDepartment] = useState("")
   const [certificateName, setCertificateName] = useState("")
   const nameRef = React.useRef<HTMLInputElement>(null)
   const registerRef = React.useRef<HTMLInputElement>(null)
@@ -82,7 +83,7 @@ export function JoinSection() {
     const reason = reasonRef.current?.value || ""
     const startupExperience = document.querySelector('input[name="startup-experience"]:checked') as HTMLInputElement
 
-    if (!fullName || !year || !registerNumber || !email) {
+    if (!fullName || !year || !registerNumber || !email || !department) {
       setError("Please fill in all required fields.")
       return
     }
@@ -94,7 +95,7 @@ export function JoinSection() {
         full_name: fullName,
         register_number: registerNumber,
         email,
-        department: "Artificial Intelligence & Data Science (AI&DS)",
+        department,
         year: year.value,
         reason,
         interests,
@@ -114,7 +115,7 @@ export function JoinSection() {
             fullName,
             registerNumber,
             email,
-            department: "Artificial Intelligence & Data Science (AI&DS)",
+            department,
             year: year.value,
             reason,
             interests,
@@ -283,12 +284,18 @@ export function JoinSection() {
                 <Label htmlFor="department" className="text-foreground">
                   Department <span className="text-destructive">*</span>
                 </Label>
-                <Select required>
+                <Select required onValueChange={setDepartment} value={department}>
                   <SelectTrigger className="bg-background border-border text-foreground">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ads">Artificial Intelligence & Data Science (AI&DS)</SelectItem>
+                    <SelectItem value="Artificial Intelligence & Data Science (AI&DS)">Artificial Intelligence & Data Science (AI&DS)</SelectItem>
+                    <SelectItem value="Computer Science and Engineering (CSE)">Computer Science and Engineering (CSE)</SelectItem>
+                    <SelectItem value="Electronics and Communication Engineering (ECE)">Electronics and Communication Engineering (ECE)</SelectItem>
+                    <SelectItem value="Electrical and Electronics Engineering (EEE)">Electrical and Electronics Engineering (EEE)</SelectItem>
+                    <SelectItem value="Information Technology (IT)">Information Technology (IT)</SelectItem>
+                    <SelectItem value="Bio Technology (BIO_TECH)">Bio Technology</SelectItem>
+                    <SelectItem value="Mechanical Engineering (MECH)">Mechanical Engineering</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

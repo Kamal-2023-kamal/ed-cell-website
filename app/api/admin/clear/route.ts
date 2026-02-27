@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     const tables = [
       "ed_cell_submissions",
       "ed_cell_events",
+      "ed_cell_event_rsvps",
       "ed_cell_team_members",
       "ed_cell_gallery_items",
     ]
