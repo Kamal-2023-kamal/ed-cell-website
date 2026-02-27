@@ -91,6 +91,19 @@ export function JoinSection() {
     setLoading(true)
 
     try {
+      // Check for duplicates before submitting
+      const { data: existing, error: checkError } = await supabase
+        .from("ed_cell_submissions")
+        .select("id")
+        .eq("register_number", registerNumber)
+        .single()
+
+      if (existing) {
+        setError("This Register Number has already been registered.")
+        setLoading(false)
+        return
+      }
+
       const payload = {
         full_name: fullName,
         register_number: registerNumber,

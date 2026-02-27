@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+
 const require = createRequire(import.meta.url)
-const rootDir = new URL('.', import.meta.url).pathname
+const rootDir = fileURLToPath(new URL('.', import.meta.url))
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

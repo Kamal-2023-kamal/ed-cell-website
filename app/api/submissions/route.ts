@@ -43,6 +43,18 @@ export async function POST(request: Request) {
     }
 
     const payload = parsed.data
+
+    // Check for duplicates
+    const { data: existing } = await supabase
+      .from("ed_cell_submissions")
+      .select("id")
+      .eq("register_number", payload.registerNumber)
+      .single()
+
+    if (existing) {
+      return NextResponse.json({ error: "Register Number already exists" }, { status: 409 })
+    }
+
     const { error } = await supabase.from("ed_cell_submissions").insert([
       {
         full_name: payload.fullName,
