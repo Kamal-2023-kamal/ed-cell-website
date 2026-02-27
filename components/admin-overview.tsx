@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Users, Calendar, Image as ImageIcon, Inbox, TrendingUp, UserPlus, Clock } from "lucide-react"
+import { Users, Calendar, Image as ImageIcon, Inbox, TrendingUp, UserPlus, Clock, Trash2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
@@ -24,6 +24,33 @@ export function AdminOverview() {
   const [yearDistribution, setYearDistribution] = useState<{ name: string; value: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
+  const clearDatabase = async () => {
+    if (!confirm("Are you sure you want to clear the entire database? This action cannot be undone.")) return
+    const secret = prompt("Please enter the admin secret to confirm:")
+    if (!secret) return
+
+    try {
+      setClearing(true)
+      const res = await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "x-admin-secret": secret },
+      })
+      const json = await res.json()
+      if (res.ok) {
+        alert("Database cleared successfully")
+        window.location.reload()
+      } else {
+        alert("Failed to clear database: " + json.error)
+      }
+    } catch (e) {
+      console.error(e)
+      alert("An error occurred")
+    } finally {
+      setClearing(false)
+    }
+  }
 
   const exportData = async () => {
     try {
@@ -190,6 +217,10 @@ export function AdminOverview() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
         <div className="flex items-center space-x-2">
+          <Button variant="destructive" onClick={clearDatabase} disabled={clearing}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            {clearing ? "Clearing..." : "Reset Database"}
+          </Button>
           <Button onClick={exportData} disabled={exporting}>
             <Download className="mr-2 h-4 w-4" />
             {exporting ? "Exporting..." : "Download Backup"}
