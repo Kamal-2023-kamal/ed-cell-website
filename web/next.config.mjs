@@ -1,3 +1,7 @@
+import { createRequire } from 'node:module'
+const require = createRequire(import.meta.url)
+const rootDir = new URL('.', import.meta.url).pathname
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Ignore static checks to save resources/time
@@ -29,6 +33,24 @@ const nextConfig = {
 
   // Standalone output for Docker/Container environments
   output: 'standalone',
+  
+  // Ensure Turbopack uses this folder as root (avoid cross-root lockfile issues)
+  turbopack: { root: rootDir },
+  
+  // Webpack fallback config (used by some pipelines like CSS resolution)
+  webpack: (config) => {
+    config.resolve = config.resolve || {}
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      tailwindcss: require.resolve('tailwindcss'),
+      '@tailwindcss/postcss': require.resolve('@tailwindcss/postcss'),
+    }
+    config.resolve.modules = [
+      ...(config.resolve.modules || []),
+      rootDir + 'node_modules',
+    ]
+    return config
+  },
 }
 
 export default nextConfig

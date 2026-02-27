@@ -5,11 +5,15 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Rocket, Sparkles, Zap, ArrowRight } from "lucide-react"
 
 export default function GrandOpeningPage() {
   const [stage, setStage] = useState<"initial" | "countdown" | "reveal" | "celebrate">("initial")
   const [count, setCount] = useState(5)
+  const [particles, setParticles] = useState<
+    Array<{ x: number; y: number; scale: number; opacity: number; driftY: number; duration: number }>
+  >([])
   const router = useRouter()
 
   useEffect(() => {
@@ -30,6 +34,20 @@ export default function GrandOpeningPage() {
       return () => clearTimeout(timer)
     }
   }, [stage])
+
+  useEffect(() => {
+    const w = typeof window !== "undefined" ? window.innerWidth : 1000
+    const h = typeof window !== "undefined" ? window.innerHeight : 1000
+    const next = Array.from({ length: 20 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      scale: Math.random() * 0.5 + 0.5,
+      opacity: Math.random() * 0.3 + 0.1,
+      driftY: Math.random() * -100,
+      duration: Math.random() * 5 + 5,
+    }))
+    setParticles(next)
+  }, [])
 
   const triggerConfetti = () => {
     const duration = 5 * 1000
@@ -156,7 +174,14 @@ export default function GrandOpeningPage() {
               className="relative"
             >
               <div className="absolute inset-0 animate-pulse rounded-full bg-purple-500/50 blur-3xl" />
-              <Zap className="h-32 w-32 text-yellow-400 sm:h-64 sm:w-64" />
+              <Image
+                src="/images/logo-transparent.png"
+                alt="ED Cell Logo"
+                width={256}
+                height={256}
+                priority
+                className="h-32 w-32 sm:h-64 sm:w-64 object-contain"
+              />
             </motion.div>
           </motion.div>
         )}
@@ -223,21 +248,21 @@ export default function GrandOpeningPage() {
 
       {/* Floating Particles */}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        {[...Array(20)].map((_, i) => (
+        {particles.map((p, i) => (
           <motion.div
             key={i}
             initial={{
-              x: Math.random() * (typeof window !== "undefined" ? window.innerWidth : 1000),
-              y: Math.random() * (typeof window !== "undefined" ? window.innerHeight : 1000),
-              scale: Math.random() * 0.5 + 0.5,
-              opacity: Math.random() * 0.3 + 0.1,
+              x: p.x,
+              y: p.y,
+              scale: p.scale,
+              opacity: p.opacity,
             }}
             animate={{
-              y: [null, Math.random() * -100],
+              y: [null, p.driftY],
               opacity: [null, 0],
             }}
             transition={{
-              duration: Math.random() * 5 + 5,
+              duration: p.duration,
               repeat: Infinity,
               ease: "linear",
             }}

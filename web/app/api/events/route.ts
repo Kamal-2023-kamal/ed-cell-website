@@ -19,7 +19,13 @@ const EventSchema = z.object({
   teamSize: z.number().int().positive().optional().default(1),
 })
 
-export async function GET() {
+export async function GET(request: Request) {
+  try {
+    const accept = request.headers.get("accept") || ""
+    if (accept.includes("text/html")) {
+      return NextResponse.redirect(new URL("/events", request.url))
+    }
+  } catch {}
   try {
     const now = Date.now()
     if (cacheData && now - cacheAt < ttlMs) {

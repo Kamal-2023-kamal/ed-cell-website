@@ -3,6 +3,7 @@
 import { Calendar, MapPin, Clock, ArrowRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 import { useEffect, useState } from "react"
 type EventItem = {
   id?: string
@@ -102,7 +103,7 @@ export function EventsSection() {
                       {event.location}
                     </div>
                   </div>
-                  {event.registrationLink && (
+                  {event.registrationLink ? (
                     <Button
                       asChild
                       variant="outline"
@@ -113,6 +114,18 @@ export function EventsSection() {
                         Register Now
                         <ArrowRight className="h-3.5 w-3.5" />
                       </a>
+                    </Button>
+                  ) : (
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="mt-5 w-full gap-1 border-border text-foreground hover:bg-secondary"
+                    >
+                      <Link href={`/events?event=${event.id || ""}`}>
+                        Apply
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
                     </Button>
                   )}
                 </div>

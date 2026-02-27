@@ -6,6 +6,7 @@
  import { Button } from "@/components/ui/button"
  import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
  import { Card, CardContent } from "@/components/ui/card"
+ import { useSearchParams, useRouter } from "next/navigation"
  
  type EventItem = {
    id?: string
@@ -42,6 +43,8 @@
    const [gallery, setGallery] = useState<GalleryItem[]>([])
    const [open, setOpen] = useState(false)
    const [selected, setSelected] = useState<EventItem | null>(null)
+   const searchParams = useSearchParams()
+   const router = useRouter()
   const [statusFilter, setStatusFilter] = useState<string>("All")
   const [rsvpName, setRsvpName] = useState("")
   const [rsvpEmail, setRsvpEmail] = useState("")
@@ -94,6 +97,16 @@
      fetchAll()
    }, [])
  
+  useEffect(() => {
+    const id = searchParams.get("event")
+    if (!id || events.length === 0) return
+    const ev = events.find((e) => e.id === id)
+    if (ev) {
+      setSelected(ev)
+      setOpen(true)
+    }
+  }, [searchParams, events])
+
    const relatedImages = useMemo(() => {
      if (!selected) return []
      const tag = slugify(selected.title)
@@ -250,7 +263,17 @@
          )}
        </div>
  
-       <Dialog open={open} onOpenChange={setOpen}>
+       <Dialog
+         open={open}
+         onOpenChange={(v) => {
+           setOpen(v)
+           if (!v) {
+             const url = new URL(window.location.href)
+             url.searchParams.delete("event")
+             router.replace(url.pathname + url.search, { scroll: false })
+           }
+         }}
+       >
          <DialogContent className="max-w-4xl">
            <DialogHeader>
              <DialogTitle>{selected?.title}</DialogTitle>
