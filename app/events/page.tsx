@@ -1,50 +1,50 @@
  "use client"
  
- import { useEffect, useMemo, useState } from "react"
- import { Calendar, Clock, MapPin, Image as ImageIcon, Share2, CalendarPlus } from "lucide-react"
- import { Badge } from "@/components/ui/badge"
- import { Button } from "@/components/ui/button"
- import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
- import { Card, CardContent } from "@/components/ui/card"
- import { useSearchParams, useRouter } from "next/navigation"
- 
- type EventItem = {
-   id?: string
-   title: string
-   date: string
-   time: string
-   location: string
-   description: string
-   status: string
-   registrationLink?: string
-   imageUrl?: string
-   teamSize?: number
- }
- 
- type GalleryItem = {
-   id: string
-   src: string
-   alt: string
-   caption?: string
-   tags?: string
-   visible?: boolean
- }
- 
- function slugify(text: string) {
-   return (text || "")
-     .toLowerCase()
-     .trim()
-     .replace(/[^a-z0-9]+/g, "-")
-     .replace(/^-+|-+$/g, "")
- }
- 
- export default function EventsPage() {
-   const [events, setEvents] = useState<EventItem[]>([])
-   const [gallery, setGallery] = useState<GalleryItem[]>([])
-   const [open, setOpen] = useState(false)
-   const [selected, setSelected] = useState<EventItem | null>(null)
-   const searchParams = useSearchParams()
-   const router = useRouter()
+ import { Suspense, useEffect, useMemo, useState } from "react"
+import { Calendar, Clock, MapPin, Image as ImageIcon, Share2, CalendarPlus } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Card, CardContent } from "@/components/ui/card"
+import { useSearchParams, useRouter } from "next/navigation"
+
+type EventItem = {
+  id?: string
+  title: string
+  date: string
+  time: string
+  location: string
+  description: string
+  status: string
+  registrationLink?: string
+  imageUrl?: string
+  teamSize?: number
+}
+
+type GalleryItem = {
+  id: string
+  src: string
+  alt: string
+  caption?: string
+  tags?: string
+  visible?: boolean
+}
+
+function slugify(text: string) {
+  return (text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+function EventsContent() {
+  const [events, setEvents] = useState<EventItem[]>([])
+  const [gallery, setGallery] = useState<GalleryItem[]>([])
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<EventItem | null>(null)
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [statusFilter, setStatusFilter] = useState<string>("All")
   const [rsvpName, setRsvpName] = useState("")
   const [rsvpEmail, setRsvpEmail] = useState("")
@@ -525,3 +525,11 @@
      </div>
    )
  }
+
+export default function EventsPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <EventsContent />
+    </Suspense>
+  )
+}
